@@ -315,7 +315,7 @@
                             <dd v-if="this.nameTaken" class="error">Dieser Benutzername ist bereits vergeben.</dd>
                         </dl>
                         
-                        <button @click="join()" class="btn btn-danger btn-block" :disabled="this.username.length == 0">Spiel beitreten</button>
+                        <button @click.prevent="join()" class="btn btn-danger btn-block" :disabled="this.username.length == 0">Spiel beitreten</button>
                     </div>
                 </form>
             </div>
