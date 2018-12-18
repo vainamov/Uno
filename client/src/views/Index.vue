@@ -306,14 +306,7 @@
                         
                         <dl class="form-group mb-4">
                             <dt><label>Serveradresse</label></dt>
-                            <dd>
-                                <div class="input-group">
-                                    <input class="form-control" type="text" v-model="serverAddress">
-                                    <span class="input-group-button">
-                                        <button @click="connect()" class="btn">Verbinden</button>
-                                    </span>
-                                </div>
-                            </dd>
+                            <dd><input class="form-control" type="text" v-model="serverAddress"></dd>
                         </dl>
 
                         <dl :class="['form-group mb-4', { 'errored': nameTaken }]">
