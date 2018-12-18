@@ -80,6 +80,7 @@
                 this.cardToPlay = new Card("", -1);
                 this.forcedColor = "";
                 this.hand = [];
+				this.players.forEach(p => p.cards = 0);
                 this.lastCard = new Card("", -1);
                 this.turn = 0;
                 this.unoNPlayer = this.unoPlayer = "";
