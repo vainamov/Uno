@@ -21,7 +21,7 @@
         nameTaken: boolean = false;
         players: {name: string, cards: number}[] = [];
         selectedMode: string = "";
-        serverAddress: string = "localhost:80";
+        serverAddress: string = `${window.location.hostname}:8081`;
         serverAvailable: boolean = false;
         showKeepCard: boolean = false;
         showPickColor: boolean = false;
