@@ -10,21 +10,24 @@
     export default class Index extends Vue {
 
         cardPlayed: boolean = false;
-        cardToPlay: Card = new Card("", -1);
+        cardToPlay: Card = new Card("", -1, "");
         drawStackCount: number = 0;
         force2or4: boolean = false;
         forceColor: boolean = false;
         forcedColor: string = "";
         hand: Card[] = [];
         joined: boolean = false;
-        lastCard: Card = new Card("", -1);
+        lastCard: Card = new Card("", -1, "");
         nameTaken: boolean = false;
+        isPlayerPick: boolean = false;
         players: {name: string, cards: number}[] = [];
+        possibleColors: string[] = ["red", "blue", "yellow", "green"];
         selectedMode: string = "";
+        selectedOptions: string[] = [];
         serverAddress: string = `${window.location.hostname}:8081`;
         serverAvailable: boolean = false;
         showKeepCard: boolean = false;
-        showPickColor: boolean = false;
+        showPicker: boolean = false;
         socket: any;
         started: boolean = false;
         turn: number = 0;
@@ -32,6 +35,10 @@
         unoNPlayer: string = "";
         unoPlayer: string = "";
         username: string = "";
+
+        addAllOptions(event: MouseEvent): void {
+            (document.getElementById("optionsInput") as HTMLInputElement).value = ((event.target as HTMLElement).getAttribute("aria-label") + "").replace(/ /g, "");
+        }
 
         connect(): void {
             this.serverAvailable = false;
@@ -43,11 +50,12 @@
             });
 
             socket.on("disconnect", () => {
-                this.cardPlayed = this.force2or4 = this.forceColor = this.joined = this.nameTaken = this.serverAvailable = this.showKeepCard = this.showPickColor = this.started = this.unoSaid = false;
-                this.cardToPlay = new Card("", -1);
+                this.cardPlayed = this.force2or4 = this.forceColor = this.joined = this.nameTaken = this.serverAvailable = this.showKeepCard = this.showPicker = this.started = this.unoSaid = false;
+                this.cardToPlay = new Card("", -1, "");
+                this.drawStackCount = 0;
                 this.forcedColor = "";
                 this.hand = [];
-                this.lastCard = new Card("", -1);
+                this.lastCard = new Card("", -1, "");
                 this.players = [];
                 this.turn = 0;
                 this.unoNPlayer = this.unoPlayer = "";
@@ -70,18 +78,33 @@
                 this.players.splice(this.players.indexOf(this.players.find((p) => p.name === player) as { name: string, cards: number }), 1);
             });
 
-            socket.on("started", (mode: string) => {
+            socket.on("started", (mode: string, options: string[]) => {
                 this.started = true;
                 this.selectedMode = mode;
+                this.selectedOptions = options;                
+
+                if (this.selectedMode === "morecolors") {
+                    this.possibleColors.push("purple");
+                }
+
+                if (this.selectedMode === "evenmorecolors") {
+                    this.possibleColors.push("purple");
+                    this.possibleColors.push("orange");
+                }
+
+                if (this.selectedMode === "colorblind") {
+                    this.possibleColors = ["gray"];
+                }
             });
 
             socket.on("stopped", () => {
-                this.cardPlayed = this.force2or4 = this.forceColor = this.showKeepCard = this.showPickColor = this.started = this.unoSaid = false;
-                this.cardToPlay = new Card("", -1);
+                this.cardPlayed = this.force2or4 = this.forceColor = this.showKeepCard = this.showPicker = this.started = this.unoSaid = false;
+                this.cardToPlay = new Card("", -1, "");
+                this.drawStackCount = 0;
                 this.forcedColor = "";
                 this.hand = [];
 				this.players.forEach(p => p.cards = 0);
-                this.lastCard = new Card("", -1);
+                this.lastCard = new Card("", -1, "");
                 this.turn = 0;
                 this.unoNPlayer = this.unoPlayer = "";
             });
@@ -90,12 +113,20 @@
                 this.hand.push(card);
             })
 
+            socket.on("set-deck", (deck: Card[]) => {
+                this.hand = deck;
+            });
+
             socket.on("suitable-card", (card: Card) => {
                 this.showKeepCard = true;
             });
 
             socket.on("player-drew-card", (player: string) => {
                 (this.players.find((p) => p.name === player) as { name: string, cards: number }).cards++;
+            });
+
+            socket.on("player-deck-count", (player: string, count: number) => {
+                (this.players.find((p) => p.name === player) as { name: string, cards: number }).cards = count;
             });
 
             socket.on("set-turn", (turn: number) => {
@@ -153,7 +184,7 @@
         }
 
         draw(): void {
-            if (this.username !== this.players[this.turn].name || this.cardPlayed || this.showKeepCard || this.showPickColor) {
+            if (this.username !== this.players[this.turn].name || this.cardPlayed || this.showKeepCard || this.showPicker) {
                 return;
             }
 
@@ -161,21 +192,53 @@
             (this.socket as SocketIOClient.Socket).emit("draw-card");
         }
 
-        getCardText(number: number): string {
-            switch (number) {
-                case 10:
-                    return "SKIP";
-                case 11:
-                    return "REVERSE";
-                case 12:
-                    return "+2";
-                case 13:
-                    return "WILD";
-                case 14:
-                    return "+4";
-                default:
+        getCardText(number: number, type: string): string {
+            switch (type) {
+                case "number":
+                    if (this.selectedOptions.includes("hex")) {
+                        switch (number) {
+                            case 10:
+                                return "A";
+                            case 11:
+                                return "B";
+                            case 12:
+                                return "C";
+                            case 13:
+                                return "D";
+                            case 14:
+                                return "E";
+                            case 15:
+                                return "F";
+                        }
+                    }
+                    
                     return `${number}`;
+                case "skip":
+                    return "Skip";
+                case "reverse":
+                    return "Reverse";
+                case "plus2":
+                    return "+2";
+                case "times2":
+                    return "×2";
+                case "plusrandom":
+                    return "+?";
+                case "nope":
+                    return "Nope";
+                case "wild":
+                    return "Wild";
+                case "plus4":
+                    return "+4";
+                case "wildrandom":
+                    return "Wild ?";
+                case "succdragon":
+                    return "Succdragon";
+                case "tornado":
+                    return "Tornado";
+                default:
+                    return type;
             }
+            
         }
 
         isCardPlayable(card: Card): boolean {
@@ -187,23 +250,31 @@
                 return false;
             }
 
-            if (this.forceColor && card.color !== "black" && card.color !== this.forcedColor) {
+            if (this.forceColor && card.color !== "black" && card.color !== "magic" && card.color !== this.forcedColor) {
                 return false;
             }
 
-            if (this.force2or4 && card.number !== this.lastCard.number) {
+            if (this.force2or4 && this.lastCard.type === "plus4" && card.type !== "plus4") {
                 return false;
+            }
+
+            if (this.force2or4 && this.lastCard.type !== "plus4" && card.type !== "plus2" && card.type !== "times2" && card.type !== "plusrandom" && card.type !== "nope") {
+                return false;
+            }
+
+            if (this.force2or4 && this.lastCard.type !== "plus4" && (card.type === "plus2" || card.type === "times2" || card.type === "plusrandom" || card.type === "nope")) {
+                return true;
             }
 
             if (this.lastCard.color === "") {
                 return true;
             }
 
-            if (card.color === "black") {
+            if (card.color === "black" || card.color === "magic") {
                 return true;
             }
 
-            return card.color === this.lastCard.color || card.number === this.lastCard.number;
+            return card.color === this.lastCard.color || (card.type === "number" && card.number === this.lastCard.number) || (card.type !== "number" && card.type === this.lastCard.type);
         }
 
         join(): void {
@@ -223,13 +294,13 @@
             (this.socket as SocketIOClient.Socket).emit("no-uno", player);
         }
 
-        pickColor(color: string): void {
-            this.showPickColor = false;
+        setPickedChoice(color: string): void {
+            this.showPicker = false;
 
             this.unoSaid = false;
             (this.socket as SocketIOClient.Socket).emit("play-card", this.cardToPlay, color);
 
-            this.cardToPlay = new Card("", -1);
+            this.cardToPlay = new Card("", -1, "");
         }
 
         playCard(card: Card): void {
@@ -240,9 +311,16 @@
             this.cardPlayed = true;
             this.showKeepCard = false;
 
-            if (card.color === "black") {
+            if (card.color === "black" && card.type !== "wildrandom") {
                 this.cardToPlay = card;
-                this.showPickColor = true;
+                this.isPlayerPick = false;
+                this.showPicker = true;
+            } else if (card.type === "wildrandom") {
+                (this.socket as SocketIOClient.Socket).emit("play-card", card, this.possibleColors[Math.random() * this.possibleColors.length | 0]);
+            } else if (this.selectedOptions.includes("7-0") && card.number === 7) {
+                this.cardToPlay = card;
+                this.isPlayerPick = true;
+                this.showPicker = true;
             } else {
                 this.unoSaid = false;
                 (this.socket as SocketIOClient.Socket).emit("play-card", card);
@@ -259,11 +337,20 @@
             let colors: string[] = ["red", "blue", "yellow", "green"];
 
             if (this.selectedMode === "morecolors") {
-                colors.push("orange");
                 colors.push("purple");
             }
 
+            if (this.selectedMode === "evenmorecolors") {
+                colors.push("purple");
+                colors.push("orange");
+            }
+
+            if (this.selectedMode === "colorblind") {
+                colors = ["gray"];
+            }
+
             colors.push("black");
+            colors.push("magic");
 
             return this.hand.sort((a, b): number => {
                 let cai = colors.indexOf(a.color);
@@ -285,8 +372,10 @@
             });
         }
 
-        startGame(mode: string = ""): void {
-            (this.socket as SocketIOClient.Socket).emit("start", mode);
+        startGame(mode: string = "", options: string[] = []): void {
+            options = (document.getElementById("optionsInput") as HTMLInputElement).value.toLowerCase().split(",");            
+
+            (this.socket as SocketIOClient.Socket).emit("start", mode, options);
         }
 
     }
@@ -328,10 +417,16 @@
                 <h3 class="h3">UNO</h3>
 
                 <div>
+                    <button @click="addAllOptions($event)" class="btn btn-sm tooltipped tooltipped-s mr-2" type="button" aria-label="+random, 7-0, hex, keepdrawing, nope, succdragon, tornado, wildrandom, x2">Verfügbare Optionen</button>
+
+                    <input id="optionsInput" class="form-control input-sm mr-2" type="text" placeholder="Optionen (1,2,3,4,...)">
+
                     <select class="form-select select-sm mr-2" v-model="selectedMode" :disabled="this.started">
                         <option value="">Spielvariante wählen</option>
                         <option value="standard">Standard</option>
                         <option value="morecolors">Mehr Farben</option>
+                        <option value="evenmorecolors">Noch mehr Farben</option>
+                        <option value="colorblind">Farbenblind</option>
                     </select>
 
                     <button @click="startGame(selectedMode)" class="btn btn-sm btn-primary" :disabled="this.started || this.selectedMode.length === 0">Spiel starten</button>
@@ -355,22 +450,32 @@
 
                     <div style="height: 100%">
                         <article v-if="lastCard.number > -1" :class="['card box-shadow-large last h4', lastCard.color]" :key="'lastCard'">
-                            <div v-if="lastCard.number < 10" class="inner" :data-number="lastCard.number">{{ getCardText(lastCard.number) }}</div>
-                            <div class="p-2" v-else>{{ getCardText(lastCard.number) }}</div>
+                            <div v-if="lastCard.type === 'number' || lastCard.type === 'plus2' || lastCard.type === 'plusrandom' || lastCard.type === 'times2'" :class="['inner', { 'small': lastCard.type !== 'number' }]" :data-number="getCardText(lastCard.number, lastCard.type)">{{ getCardText(lastCard.number, lastCard.type) }}</div>
+                            <div class="p-2" v-else>{{ getCardText(lastCard.number, lastCard.type) }}</div>
                         </article>
                     </div>
 
-                    <div v-if="this.showPickColor">
+                    <div v-if="this.showPicker && !this.isPlayerPick">
                         <div class="BtnGroup mt-2">
-                            <button @click="pickColor('red')" class="btn BtnGroup-item bg-red text-white" style="background-image: none !important">Rot</button>
-                            <button @click="pickColor('blue')" class="btn BtnGroup-item bg-blue text-white" style="background-image: none !important">Blau</button>
-                            <button @click="pickColor('yellow')" class="btn BtnGroup-item bg-yellow" style="background-image: none !important">Gelb</button>
-                            <button @click="pickColor('green')" class="btn BtnGroup-item bg-green text-white" style="background-image: none !important">Grün</button>
+                            <button @click="setPickedChoice('red')" class="btn BtnGroup-item bg-red text-white" style="background-image: none !important">Rot</button>
+                            <button @click="setPickedChoice('blue')" class="btn BtnGroup-item bg-blue text-white" style="background-image: none !important">Blau</button>
+                            <button @click="setPickedChoice('yellow')" class="btn BtnGroup-item bg-yellow" style="background-image: none !important">Gelb</button>
+                            <button @click="setPickedChoice('green')" class="btn BtnGroup-item bg-green text-white" style="background-image: none !important">Grün</button>
                             
                             <template v-if="this.selectedMode === 'morecolors'">
-                                <button @click="pickColor('orange')" class="btn BtnGroup-item bg-orange text-white" style="background-image: none !important">Orange</button>
-                                <button @click="pickColor('purple')" class="btn BtnGroup-item bg-purple text-white" style="background-image: none !important">Lila</button>
+                                <button @click="setPickedChoice('purple')" class="btn BtnGroup-item bg-purple text-white" style="background-image: none !important">Lila</button>
                             </template>
+
+                            <template v-if="this.selectedMode === 'evenmorecolors'">
+                                <button @click="setPickedChoice('purple')" class="btn BtnGroup-item bg-purple text-white" style="background-image: none !important">Lila</button>
+                                <button @click="setPickedChoice('orange')" class="btn BtnGroup-item bg-orange text-white" style="background-image: none !important">Orange</button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div v-if="this.showPicker && this.isPlayerPick">
+                        <div class="BtnGroup mt-2">
+                            <button v-for="player in players.filter(p => p.name !== this.username)" @click="setPickedChoice(player.name)" class="btn BtnGroup-item" style="background-image: none !important" :key="'pick-' + player.name">{{ player.name }}</button>
                         </div>
                     </div>
                 </div>
@@ -402,7 +507,7 @@
 
         </section>        
 
-        <section v-if="this.started" class="action pb-4 px-4">
+        <section v-if="this.started" :class="['action pb-4 px-4', { 'sunken': username !== players[turn].name || showPicker}]">
 
             <div class="action-item">
                 <article @click="draw()" :class="['card box-shadow-large deck h4 p-2', { 'playable': username === players[turn].name && !cardPlayed && !showKeepCard }]">Vom Stapel nehmen</article>
@@ -412,8 +517,9 @@
             <div class="action-item">
                 <div class="hand">
                     <article v-for="(card, index) in sortedHand()" @click="playCard(card)" :class="['card box-shadow-large h4', card.color, { 'playable': isCardPlayable(card) }]" :key="'card-' + index">
-                        <div v-if="card.number < 10" class="inner" :data-number="card.number">{{ getCardText(card.number) }}</div>
-                        <div class="p-2" v-else>{{ getCardText(card.number) }}</div>
+                        <div v-if="card.type === 'number' || card.type === 'plus2' || card.type === 'plusrandom' || card.type === 'times2'" :class="['inner', { 'small': card.type !== 'number' }]" :data-number="getCardText(card.number, card.type)">{{ getCardText(card.number, card.type) }}</div>
+
+                        <div class="p-2" v-else>{{ getCardText(card.number, card.type) }}</div>
                     </article>
                 </div>
             </div>
@@ -485,6 +591,12 @@
     .action {
         display: flex;
         height: 300px;
+        transform: none;
+        transition: transform .75s cubic-bezier(.19, 1, .22, 1);
+
+        &.sunken {
+            transform: translateY(50%);
+        }
     }
 
     .action-item {
@@ -564,6 +676,22 @@
 
             .inner {
                 color: #6F42C1;
+            }
+        }
+
+        &.gray {
+            background-color: #999;
+
+            .inner {
+                color: #999;
+            }
+        }
+
+        &.magic {
+            background-color: #A306B8;
+
+            .inner {
+                color: #A306B8;
             }
         }
 
@@ -670,6 +798,10 @@
             &::before {
                 left: 8px;
                 top: -116px;
+            }
+
+            &.small {
+                font-size: 100px;
             }
         }
     }
